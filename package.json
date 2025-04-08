@@ -4,7 +4,7 @@
   "description": "A multi functional WhatsApp bot Web paircode.",
   "main": "index.js",
   "scripts": {
-    "start": "pm2 start index.js --deep-monitoring --attach --name techbros-md",
+    "start": "node index.js",
     "stop": "pm2 stop techbros-md",
     "restart": "pm2 restart techbros-md"
   },
