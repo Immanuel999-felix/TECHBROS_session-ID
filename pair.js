@@ -1,7 +1,8 @@
+//*******#*****#$$$$$$$$_&
 const express = require('express');
 const fs = require('fs');
 const { exec } = require("child_process");
-let router = express.Router()
+let router = express.Router();
 const pino = require("pino");
 const {
     default: makeWASocket,
@@ -13,6 +14,8 @@ const {
 } = require("@whiskeysockets/baileys");
 const { upload } = require('./mega');
 
+const logger = pino({ level: "info" }); // Increased logging level for debugging
+
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
     fs.rmSync(FilePath, { recursive: true, force: true });
@@ -21,9 +24,12 @@ function removeFile(FilePath) {
 router.get('/', async (req, res) => {
     let num = req.query.number;
     async function techbrosPair() {
-        const { state, saveCreds } = await useMultiFileAuthState(`./session`);
+        const sessionPath = `./session`;
+        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+        let techbrosWeb;
+
         try {
-            let techbrosWeb = makeWASocket({
+            techbrosWeb = makeWASocket({
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
@@ -33,24 +39,14 @@ router.get('/', async (req, res) => {
                 browser: Browsers.macOS("Safari"),
             });
 
-            if (!techbrosWeb.authState.creds.registered) {
-                await delay(1500);
-                num = num.replace(/[^0-9]/g, '');
-                const code = await techbrosWeb.requestPairingCode(num);
-                if (!res.headersSent) {
-                    await res.send({ code });
-                }
-            }
-
             techbrosWeb.ev.on('creds.update', saveCreds);
+
             techbrosWeb.ev.on("connection.update", async (s) => {
                 const { connection, lastDisconnect } = s;
                 if (connection === "open") {
+                    logger.info(`WhatsApp connection opened for ${techbrosWeb.user.id}`);
                     try {
-                        await delay(10000);
-                        const sessionTechbros = fs.readFileSync('./session/creds.json');
-                        const auth_path = './session/';
-                        const user_jid = jidNormalizedUser(techbrosWeb.user.id);
+                        await delay(5000); // Shortened delay
 
                         function randomMegaId(length = 6, numberLength = 4) {
                             const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -62,64 +58,96 @@ router.get('/', async (req, res) => {
                             return `${result}${number}`;
                         }
 
-                        const mega_url = await upload(fs.createReadStream(auth_path + 'creds.json'), `${randomMegaId()}.json`);
+                        const mega_url = await upload(fs.createReadStream(sessionPath + '/creds.json'), `${randomMegaId()}.json`);
                         const string_session = mega_url.replace('https://mega.nz/file/', '');
                         const prefixedSid = `TECBROS-MD~${string_session.substring(0, 8)}#${string_session.substring(8, 12)}-${string_session.substring(12)}`;
+                        const user_jid = jidNormalizedUser(techbrosWeb.user.id);
 
-                        // Send the styled text and image as a reply to the session ID
-                        const coolText = `_Thank you for choosing our bot🤖_:\n*TECHBROS-MD*\n\n_Please keep this session ID safe, don't share with anyone ‼️_\n\`\`\`${prefixedSid}\`\`\`\nEnjoy all the awesome features of this bot🥳©2025`;
+                        const coolText = `_Thank you for choosing our bot🙂_:\n*TECHBROS-MD*\n\n_Please keep this session ID safe‼️_\n\`\`\`${prefixedSid}\`\`\`\nEnjoy all the awesome features of this bot🥳`;
                         const imageUrl = 'https://i.ibb.co/wrhHm9YZ/file-181.jpg';
-
-                        const reply = await techbrosWeb.sendMessage(user_jid, {
-                            image: { url: imageUrl },
-                            caption: coolText,
-                            quoted: {
-                                key: {
-                                    fromMe: false, // It's not a message sent by the bot itself
-                                    remoteJid: user_jid,
-                                    id: 'TEMP-MESSAGE-ID' // You can use a temporary ID
-                                },
-                                messageTimestamp: Date.now() / 1000,
-                                pushName: 'WhatsApp User' // Or any name
-                            }
-                        });
-
-                        // Sending audio (replying to the previous message)
                         const audioPath = './audio/pairing_success.mp3';
                         const audioMimetype = 'audio/mpeg';
 
                         try {
-                            await techbrosWeb.sendMessage(
-                                user_jid,
-                                {
-                                    audio: { url: audioPath },
-                                    mimetype: audioMimetype,
-                                    quoted: reply // Reply to the styled text and image message
+                            const imageMessage = await techbrosWeb.sendMessage(user_jid, {
+                                image: { url: imageUrl },
+                                caption: coolText,
+                                quoted: {
+                                    key: {
+                                        fromMe: false,
+                                        remoteJid: user_jid,
+                                        id: 'TEMP-MESSAGE-ID-' + Date.now() // Unique temp ID
+                                    },
+                                    messageTimestamp: Date.now() / 1000,
+                                    pushName: 'WhatsApp User'
                                 }
-                            );
-                        } catch (audioError) {
-                            console.error("Error sending audio:", audioError);
+                            });
+                            logger.info(`Session ID and welcome message sent to ${user_jid}`);
+
+                            try {
+                                await techbrosWeb.sendMessage(
+                                    user_jid,
+                                    {
+                                        audio: { url: audioPath },
+                                        mimetype: audioMimetype,
+                                        quoted: imageMessage // Reply to the image message
+                                    }
+                                );
+                                logger.info(`Pairing success audio sent to ${user_jid}`);
+                            } catch (audioError) {
+                                logger.error("Error sending audio:", audioError);
+                            }
+
+                        } catch (messageError) {
+                            logger.error("Error sending session ID or welcome message:", messageError);
                         }
 
+                        await delay(100);
+                        await removeFile(sessionPath);
+                        logger.info(`Session files removed from server.`);
+                        process.exit(0);
+
                     } catch (e) {
+                        logger.error("Error during message sending:", e);
                         exec('pm2 restart techbros-md');
                     }
-
-                    await delay(100);
-                    return await removeFile('./session');
-                    process.exit(0);
                 } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
+                    logger.warn(`Connection closed unexpectedly. Reconnecting in 10 seconds...`);
                     await delay(10000);
                     techbrosPair();
                 }
             });
+
+            if (!techbrosWeb.authState.creds.registered) {
+                logger.info(`Requesting pairing code for number: ${num}`);
+                await delay(1500);
+                num = num.replace(/[^0-9]/g, '');
+                try {
+                    const code = await techbrosWeb.requestPairingCode(num);
+                    logger.info(`Pairing code generated: ${code}`);
+                    if (!res.headersSent) {
+                        await res.send({ code });
+                    }
+                } catch (pairingCodeError) {
+                    logger.error("Error requesting pairing code:", pairingCodeError);
+                    if (!res.headersSent) {
+                        await res.send({ code: "Failed to generate pairing code." });
+                    }
+                }
+            }
+
         } catch (err) {
+            logger.error("Error during pairing process:", err);
             exec('pm2 restart techbros-md');
-            console.log("service restarted");
-            techbrosPair();
-            await removeFile('./session');
+            await removeFile(sessionPath);
             if (!res.headersSent) {
                 await res.send({ code: "Service Unavailable" });
+            }
+        } finally {
+            if (techbrosWeb?.ws?.readyState === 1) {
+                // Ensure disconnection if still connected and not closed by the 'connection.update' event
+                await techbrosWeb.ws.close();
+                logger.info("WebSocket connection closed.");
             }
         }
     }
@@ -127,10 +155,10 @@ router.get('/', async (req, res) => {
 });
 
 process.on('uncaughtException', function (err) {
-    console.log('Caught exception: ' + err);
+    logger.fatal('Uncaught exception:', err);
     exec('pm2 restart techbros-md');
 });
 
-
 module.exports = router;
+                                
           
