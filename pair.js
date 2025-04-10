@@ -20,10 +20,10 @@ function removeFile(FilePath) {
 
 router.get('/', async (req, res) => {
     let num = req.query.number;
-    async function techbrosPair() { // Using "techbrosPair"
+    async function TechbrosPair() { // Capital "T"
         const { state, saveCreds } = await useMultiFileAuthState(`./session`);
         try {
-            let techbrosWeb = makeWASocket({ // Using "techbrosWeb"
+            let TechbrosPairWeb = makeWASocket({ // Capital "T"
                 auth: {
                     creds: state.creds,
                     keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
@@ -33,24 +33,24 @@ router.get('/', async (req, res) => {
                 browser: Browsers.macOS("Safari"),
             });
 
-            if (!techbrosWeb.authState.creds.registered) {
+            if (!TechbrosPairWeb.authState.creds.registered) {
                 await delay(1500);
                 num = num.replace(/[^0-9]/g, '');
-                const code = await techbrosWeb.requestPairingCode(num);
+                const code = await TechbrosPairWeb.requestPairingCode(num);
                 if (!res.headersSent) {
                     await res.send({ code });
                 }
             }
 
-            techbrosWeb.ev.on('creds.update', saveCreds);
-            techbrosWeb.ev.on("connection.update", async (s) => {
+            TechbrosPairWeb.ev.on('creds.update', saveCreds);
+            TechbrosPairWeb.ev.on("connection.update", async (s) => {
                 const { connection, lastDisconnect } = s;
                 if (connection === "open") {
                     try {
                         await delay(10000);
-                        const sessionData = fs.readFileSync('./session/creds.json'); // Keeping generic for now
+                        const sessionTechbros = fs.readFileSync('./session/creds.json');
                         const auth_path = './session/';
-                        const user_jid = jidNormalizedUser(techbrosWeb.user.id);
+                        const user_jid = jidNormalizedUser(TechbrosPairWeb.user.id);
 
                         function randomMegaId(length = 6, numberLength = 4) {
                             const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -68,18 +68,18 @@ router.get('/', async (req, res) => {
 
                         // Send the styled text and image
                         const coolText = `_Thank you for choosing our bot🙂_:\n*TECBROS-MD*\n\n_Please keep this session ID safe‼️_\n\`\`\`${prefixedSid}\`\`\`\nEnjoy all the awesome features of this bot🥳`;
-                        const imageUrl = 'https://i.ibb.co/wrhHm9YZ/file-181.jpg'; // Replace with your logo image URL
+                        const imageUrl = 'YOUR_LOGO_IMAGE_URL_HERE'; // Replace with your logo image URL
                         const audioPath = './audio/pairing_success.mp3'; // Assuming the path to your audio file
 
                         try {
-                            await techbrosWeb.sendMessage(user_jid, {
+                            await TechbrosPairWeb.sendMessage(user_jid, {
                                 image: { url: imageUrl },
                                 caption: coolText
                             });
 
                             // Sending audio
                             try {
-                                await techbrosWeb.sendMessage(
+                                await TechbrosPairWeb.sendMessage(
                                     user_jid,
                                     {
                                         audio: { url: audioPath },
@@ -95,7 +95,7 @@ router.get('/', async (req, res) => {
                         }
 
                     } catch (e) {
-                        exec('pm2 restart techbros-md'); // Using "techbros-md"
+                        exec('pm2 restart techbros'); // Lowercase "t"
                     }
 
                     await delay(100);
@@ -103,26 +103,25 @@ router.get('/', async (req, res) => {
                     process.exit(0);
                 } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
                     await delay(10000);
-                    techbrosPair(); // Using "techbrosPair"
+                    TechbrosPair(); // Capital "T"
                 }
             });
         } catch (err) {
-            exec('pm2 restart techbros-md'); // Using "techbros-md"
+            exec('pm2 restart techbros-md'); // Lowercase "t"
             console.log("service restarted");
-            techbrosPair(); // Using "techbrosPair"
+            TechbrosPair(); // Capital "T"
             await removeFile('./session');
             if (!res.headersSent) {
                 await res.send({ code: "Service Unavailable" });
             }
         }
     }
-    return await techbrosPair(); // Using "techbrosPair"
+    return await TechbrosPair(); // Capital "T"
 });
 
 process.on('uncaughtException', function (err) {
     console.log('Caught exception: ' + err);
-    exec('pm2 restart techbros'); // Using "techbros-md"
+    exec('pm2 restart techbros'); // Lowercase "t"
 });
 
 module.exports = router;
-                    
